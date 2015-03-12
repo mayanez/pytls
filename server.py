@@ -1,7 +1,6 @@
 import SocketServer
 import BaseHTTPServer
 import SimpleHTTPServer
-import hashlib
 import urlparse
 import os, cgi
 import sys
@@ -9,14 +8,8 @@ import socket
 from OpenSSL import SSL
 
 def verify_cb(conn, cert, errnum, depth, ok):
-    # This obviously has to be updated
-    print 'Got certificate: %s' % cert.get_subject()
+    print 'Verified certificate: %s' % cert.get_subject()
     return ok
-
-def gen_hash(data):
-    m = hashlib.sha256()
-    m.update(data)
-    return m.hexdigest()
 
 def mode_n(data):
     return data
@@ -34,11 +27,13 @@ class CustomHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         url = urlparse.urlparse(self.path)
         filepath = url.path[1:] # remove leading '/'
 
-        f = open( os.path.join(CWD, filepath), 'rb' )
+        f = open( filepath, 'rb' )
+        h = open( filepath + '.sha256', 'rb')
         data = f.read()
+        data_hash = h.read()
 
         self.send_response(200)
-        self.send_header('SHA256', gen_hash(data))
+        self.send_header('SHA256', data_hash)
         self.send_header('Content-type', 'application/octet-stream')
         self.end_headers()
 
@@ -50,7 +45,12 @@ class CustomHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     def do_POST(self):
         url = urlparse.urlparse(self.path)
         filepath = url.path[1:] # remove leading '/'
-        f = open( os.path.join(CWD, "receive/" + filepath), 'wb' )
+        f = open("receive/" + filepath, 'wb' )
+        h = open("receive/" + filepath + ".sha256", 'wb')
+
+        data_hash = urlparse.parse_qs(url.query)['hash'][0]
+        h.write(data_hash)
+        h.close()
 
         ctype, pdict = cgi.parse_header(self.headers.getheader('content-type'))
 
@@ -64,8 +64,8 @@ class CustomHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         f.close()
 
         self.wfile.write("%s uploaded" % filepath)
-        print uploadfilecontent[0]
-
+        print "%s uploaded" % filepath
+        
 class ThreadingSimpleServer(SocketServer.ThreadingMixIn,
                    BaseHTTPServer.HTTPServer):
     def __init__(self, server_address, HandlerClass):
