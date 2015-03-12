@@ -1,5 +1,20 @@
-import os, sys, socket, select, binascii, signal, threading, ushlex, cmd, datetime
+import os, sys, socket, select, binascii, signal, threading, ushlex, cmd, datetime, ssl
 import requests
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.poolmanager import PoolManager
+
+class SSLAdapter(HTTPAdapter):
+    '''An HTTPS Transport Adapter that uses an arbitrary SSL version.'''
+    def __init__(self, ssl_version=None, **kwargs):
+        self.ssl_version = ssl_version
+
+        super(SSLAdapter, self).__init__(**kwargs)
+
+    def init_poolmanager(self, connections, maxsize, block=False):
+        self.poolmanager = PoolManager(num_pools=connections,
+                                       maxsize=maxsize,
+                                       block=block,
+                                       ssl_version=self.ssl_version)
 
 def signal_handler(signal, frame):
     print "Exiting..."
@@ -11,6 +26,8 @@ def mode_n(data):
 class Client(cmd.Cmd):
     host = None
     port = None
+    session = requests.Session()
+    session.mount('https://', SSLAdapter(ssl.PROTOCOL_TLSv1))
     prompt = '>'
     modes = {
                 'N': mode_n,
@@ -20,8 +37,8 @@ class Client(cmd.Cmd):
     def do_EOF(self, line):
         return True
 
-    def do_stop(self):
-        signal_handler()
+    def do_stop(self, line):
+        signal_handler(None, None)
         return
 
     def do_get(self, line):
@@ -29,7 +46,7 @@ class Client(cmd.Cmd):
         file_name = args[0]
         mode = args[1]
 
-        response = requests.get("http://%s:%s/%s" % (self.host, self.port, file_name))
+        response = self.session.get("https://%s:%s/%s" % (self.host, self.port, file_name), verify='server.pem', cert='client.pem')
         f = open(file_name + str(datetime.datetime.now()), 'wb')
         h = open(file_name + '.sha256', 'wb')
 
@@ -48,7 +65,7 @@ class Client(cmd.Cmd):
         file_name = args[0]
         mode = args[1]
 
-        response = requests.post("http://%s:%s/%s" % (self.host, self.port, file_name), files={file_name : open(file_name, 'rb')})
+        response = self.session.post("https://%s:%s/%s" % (self.host, self.port, file_name), files={file_name : open(file_name, 'rb')}, verify=False)
         print response.text
 
     def set_host(self, host):
@@ -65,6 +82,7 @@ if __name__ == '__main__':
         print 'Usage: python client.py HOST PORT'
         sys.exit(1)
 
+    requests.packages.urllib3.disable_warnings()
     signal.signal(signal.SIGINT, signal_handler)
     #s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
