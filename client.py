@@ -1,4 +1,4 @@
-import sys, socket, select, binascii, signal, threading
+import sys, socket, select, binascii, signal, threading, ushlex
 
 def signal_handler(signal, frame):
     sys.exit(0)
@@ -32,11 +32,11 @@ if __name__ == '__main__':
                     #incoming message from remote server
                     if sock == s:
                         data = sock.recv(4096)
-                        if data == 'ack':
+                        if data == 'GET':
                             print "closing file"
                             f.close()
                             prompt()
-                        if data and data != 'ack':
+                        if data and data != 'GET':
                             print "writing to file"
                             f.write(binascii.hexlify(data))
                             

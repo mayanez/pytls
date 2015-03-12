@@ -12,6 +12,30 @@ def verify_cb(conn, cert, errnum, depth, ok):
     print 'Got certificate: %s' % cert.get_subject()
     return ok
 
+def send_file(sock, file_name):
+    f = open(file_name, 'rb')
+    buff = f.read()
+    print "Sending %s" % file_name
+
+    try:
+        sock.sendall(binascii.hexlify(buff))
+        f.close()
+        sock.sendall('GET')
+    except:
+        print "exception"
+        raise Exception()
+
+def receive_file(sock, file_name):
+    f = open("files/" + file_name, 'wb')
+    
+    while True:
+        data = sock.recv(4096)
+        if not data: break
+        f.write(binascii.hexlify(data))
+
+    f.close()
+    sock.sendall('PUT')
+
 def process_request(sock, data):
     print "Processing"
     tokens = ushlex.split(data)
@@ -36,22 +60,10 @@ def process_request(sock, data):
     # logger.debug("Parsed: %s %s %s %s" % (command, file_name, mode, password))
 
     if (command == 'get'):
-        #get a file
-        f = open(file_name, 'rb')
-        buff = f.read()
-        print "Sending %s" % file_name
-
-        try:
-            sock.sendall(binascii.hexlify(buff))
-            f.close()
-            sock.sendall('ack')
-        except:
-            print "exception"
-            raise Exception()
-        #sock.shutdown(socket.SHUT_WR)
+        send_file(sock, file_name)
 
     elif (command == 'put'):
-        print "nothing"
+        receive_file(sock, file_name)
     
     print "done process"    
     return
