@@ -1,4 +1,4 @@
-import sys, os, socket, ushlex, logging, select, binascii, threading, signal
+import hashlib, sys, os, socket, ushlex, logging, select, binascii, threading, signal
 from OpenSSL import SSL
 
 # logger = logging.getLogger(__name__)
@@ -12,26 +12,46 @@ def verify_cb(conn, cert, errnum, depth, ok):
     print 'Got certificate: %s' % cert.get_subject()
     return ok
 
+def gen_hash(data):
+    m = hashlib.sha256()
+    m.update(data)
+    return m.digest()
+
 def send_file(sock, file_name):
     f = open(file_name, 'rb')
     buff = f.read()
     print "Sending %s" % file_name
 
     try:
-        sock.sendall(binascii.hexlify(buff))
+        header = "GET 200 OK\r\n"
+        header += "Length: %d\r\n x\r\n" % sys.getsizeof(buff)
+
+        sock.sendall(header)
+        print buff
+        sock.sendall(buff)
         f.close()
-        sock.sendall('GET')
+    except:
+        print "exception"
+        raise Exception()
+
+    try:
+        sha_hash = gen_hash(buff)
+        header = "SHA 200 OK\r\n"
+        header += "Length: %d\r\n \r\n" % sys.getsizeof(sha_hash)
+
+        sock.sendall(header)
+        sock.sendall(sha_hash)
     except:
         print "exception"
         raise Exception()
 
 def receive_file(sock, file_name):
     f = open("files/" + file_name, 'wb')
-    
+
     while True:
         data = sock.recv(4096)
         if not data: break
-        f.write(binascii.hexlify(data))
+        f.write(binascii.unhexlify(data))
 
     f.close()
     sock.sendall('PUT')
@@ -39,7 +59,7 @@ def receive_file(sock, file_name):
 def process_request(sock, data):
     print "Processing"
     tokens = ushlex.split(data)
-    
+
     command = ''
     file_name = ''
     mode = ''
@@ -64,8 +84,8 @@ def process_request(sock, data):
 
     elif (command == 'put'):
         receive_file(sock, file_name)
-    
-    print "done process"    
+
+    print "done process"
     return
 
 
@@ -83,7 +103,7 @@ class Server(threading.Thread):
         except socket.error:
             print('Bind failed %s' % (socket.error))
             sys.exit()
- 
+
         self.server.listen(10)
 
     def run_thread(self, conn, addr):
@@ -91,9 +111,13 @@ class Server(threading.Thread):
         while True:
             data = conn.recv(4096)
             try:
-                process_request(conn, data)     
+                if data:
+                    process_request(conn, data)
+                else: break
             except:
-                print "Error Processing Request"        
+                print "Error Processing Request"
+                break
+        print('Client disconnected with %s %s' % addr)
         conn.close() # Close
         return
 
@@ -102,7 +126,6 @@ class Server(threading.Thread):
         # We need to run a loop and create a new thread for each connection
         while True:
             conn, addr = self.server.accept()
-            #users[addr[0] + ":" + addr[1]] = conn
             threading.Thread(target=self.run_thread, args=(conn, addr)).start()
 
 
