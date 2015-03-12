@@ -36,6 +36,8 @@ class Client(cmd.Cmd):
     session = requests.Session()
     session.mount('https://', SSLAdapter(ssl.PROTOCOL_TLSv1))
     prompt = '>'
+    
+    #handle invalid modes
     modes = {
                 'N': mode_n
             }
@@ -43,9 +45,18 @@ class Client(cmd.Cmd):
     def do_EOF(self, line):
         return True
 
+    def default(self, line):
+        print "*** Invalid commands, options are 'get' 'put' 'stop'"
+
     def do_stop(self, line):
+        """Exits the program"""
         signal_handler(None, None)
         return
+
+    def help_get(self):
+        print '\n'.join(['get file mode [password]',
+                         '\tmode -- N, E',
+                         '\t[password] -- only for E mode'])
 
     def do_get(self, line):
         args = ushlex.split(line)
@@ -53,25 +64,39 @@ class Client(cmd.Cmd):
         mode = args[1]
 
         #add error checking if cant reach host
+        #handle 404 if file not found
         response = self.session.get("https://%s:%s/%s" % (self.host, self.port, file_name), verify=self.server_cert, cert=self.cert)
-        f = open(file_name + str(datetime.datetime.now()), 'wb')
-
+        
+        # Might there be a way to avoid this?
+        f = open(file_name, 'wb')
         for chunk in response.iter_content(4096):
             f.write(chunk)
-
-        #re-read file and possibel decrypt
-
-        #verify hash
-        data_hash = response.headers['SHA256']
+        f.close()
+        
+        f = open(file_name, 'rb')
+        data = f.read()
+        computed_hash = gen_hash(data)
         f.close()
 
-        print "%s received" % file_name
+        data_hash = response.headers['SHA256']
+
+        if data_hash == computed_hash:
+            print "%s received" % file_name
+        else:
+            os.remove(file_name)
+            print "%s did not pass verification" % file_name
+
+    def help_put(self):
+        print '\n'.join(['put file mode [password]',
+                         '\tmode -- N, E',
+                         '\t[password] -- only for E mode'])
 
     def do_put(self, line):
         args = ushlex.split(line)
         file_name = args[0]
         mode = args[1]
 
+        #handle if file exists before uploading
         f = open(file_name, 'rb')
         data = f.read()
         params ={'hash' : gen_hash(data)}
@@ -100,6 +125,5 @@ if __name__ == '__main__':
     client.cert = sys.argv[4]
 
     client.cmdloop()
-
-    s.close()
+    
     sys.exit()
