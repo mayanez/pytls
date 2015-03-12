@@ -1,153 +1,72 @@
-import hashlib, sys, os, socket, ushlex, logging, select, binascii, threading, signal
-from OpenSSL import SSL
-
-# logger = logging.getLogger(__name__)
-
-BUFFER_SIZE = 4096
-
-def signal_handler(signal, frame):
-    os._exit(1)
-
-def verify_cb(conn, cert, errnum, depth, ok):
-    print 'Got certificate: %s' % cert.get_subject()
-    return ok
+import SocketServer
+import BaseHTTPServer
+import SimpleHTTPServer
+import hashlib
+import urlparse
+import os, cgi
+import sys
 
 def gen_hash(data):
     m = hashlib.sha256()
     m.update(data)
-    return m.digest()
+    return m.hexdigest()
 
-def send_file(sock, file_name):
-    f = open(file_name, 'rb')
-    buff = f.read()
-    print "Sending %s" % file_name
+def mode_n(data):
+    return data
 
-    try:
-        header = "GET 200 OK\r\n"
-        header += "Length: %d\r\n x\r\n" % sys.getsizeof(buff)
+CWD = os.path.abspath('.')
 
-        sock.sendall(header)
-        print buff
-        sock.sendall(buff)
+class CustomHandler(BaseHTTPServer.BaseHTTPRequestHandler):
+
+    def do_GET(self):
+        url = urlparse.urlparse(self.path)
+        filepath = url.path[1:] # remove leading '/'
+
+        f = open( os.path.join(CWD, filepath), 'rb' )
+        data = f.read()
+
+        self.send_response(200)
+        self.send_header('SHA256', gen_hash(data))
+        self.send_header('Content-type', 'application/octet-stream')
+        self.end_headers()
+
+        self.wfile.write(data)
+
         f.close()
-    except:
-        print "exception"
-        raise Exception()
-
-    try:
-        sha_hash = gen_hash(buff)
-        header = "SHA 200 OK\r\n"
-        header += "Length: %d\r\n \r\n" % sys.getsizeof(sha_hash)
-
-        sock.sendall(header)
-        sock.sendall(sha_hash)
-    except:
-        print "exception"
-        raise Exception()
-
-def receive_file(sock, file_name):
-    f = open("files/" + file_name, 'wb')
-
-    while True:
-        data = sock.recv(4096)
-        if not data: break
-        f.write(binascii.unhexlify(data))
-
-    f.close()
-    sock.sendall('PUT')
-
-def process_request(sock, data):
-    print "Processing"
-    tokens = ushlex.split(data)
-
-    command = ''
-    file_name = ''
-    mode = ''
-    password = ''
-
-    if len(tokens) < 3:
-        raise Exception("Invalid Command Format!")
-
-    if len(tokens) >=3:
-        command = tokens[0]
-        file_name = tokens[1]
-        mode = tokens[2]
-
-    if (mode == 'E' and len(tokens) == 4):
-        password = tokens[3]
-
-    print "Parsed: %s %s %s %s" % (command, file_name, mode, password)
-    # logger.debug("Parsed: %s %s %s %s" % (command, file_name, mode, password))
-
-    if (command == 'get'):
-        send_file(sock, file_name)
-
-    elif (command == 'put'):
-        receive_file(sock, file_name)
-
-    print "done process"
-    return
-
-
-class Server(threading.Thread):
-
-    def __init__(self, port, host='localhost'):
-        threading.Thread.__init__(self)
-        self.port = port
-        self.host = host
-        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.users = {}
-
-        try:
-            self.server.bind((self.host, self.port))
-        except socket.error:
-            print('Bind failed %s' % (socket.error))
-            sys.exit()
-
-        self.server.listen(10)
-
-    def run_thread(self, conn, addr):
-        print('Client connected with ' + addr[0] + ':' + str(addr[1]))
-        while True:
-            data = conn.recv(4096)
-            try:
-                if data:
-                    process_request(conn, data)
-                else: break
-            except:
-                print "Error Processing Request"
-                break
-        print('Client disconnected with %s %s' % addr)
-        conn.close() # Close
         return
 
-    def run(self):
-        print('Waiting for connections on port %s' % (self.port))
-        # We need to run a loop and create a new thread for each connection
-        while True:
-            conn, addr = self.server.accept()
-            threading.Thread(target=self.run_thread, args=(conn, addr)).start()
+    def do_POST(self):
+        url = urlparse.urlparse(self.path)
+        filepath = url.path[1:] # remove leading '/'
+        f = open( os.path.join(CWD, "receive/" + filepath), 'wb' )
 
+        ctype, pdict = cgi.parse_header(self.headers.getheader('content-type'))
 
-def main():
-    if len(sys.argv) < 2:
-        print 'Usage: python server.py PORT'
-        sys.exit(1)
+        if ctype == 'multipart/form-data':
+            query = cgi.parse_multipart(self.rfile, pdict)
 
-    # dir = os.path.dirname(sys.argv[0])
-    # if dir == '':
-    #     dir = os.curdir
+        self.end_headers()
 
-    # Initialize Context
-    # ctx = SSL.Context(SSL.TLSv1_2_METHOD)
-    # ctx.set_options(SSL.OP_NO_SSLv2)
-    # ctx.set_verify(SSL.VERIFY_PEER|SSL.VERIFY_FAIL_IF_NO_PEER_CERT, verify_cb)
-    # ctx.use_privatekey_file(os.path.join(dir, 'server.pkey'))
-    # ctx.use_certificate_file(os.path.join(dir, 'server.cert'))
-    # ctx.load_verify_locations(os.path.join(dir, 'CA.cert'))
-    signal.signal(signal.SIGINT, signal_handler)
-    server = Server(int(sys.argv[1]))
-    server.run()
+        uploadfilecontent = query.get(filepath)
+        f.write(uploadfilecontent[0])
+        f.close()
 
-if __name__ == '__main__':
-    main()
+        self.wfile.write("%s uploaded" % filepath)
+        print uploadfilecontent[0]
+
+class ThreadingSimpleServer(SocketServer.ThreadingMixIn,
+                   BaseHTTPServer.HTTPServer):
+    pass
+
+if sys.argv[1:]:
+    port = int(sys.argv[1])
+else:
+    port = 8000
+
+server = ThreadingSimpleServer(('', port), CustomHandler)
+try:
+    while 1:
+        sys.stdout.flush()
+        server.handle_request()
+except KeyboardInterrupt:
+    print "Finished"
