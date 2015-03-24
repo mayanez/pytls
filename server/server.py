@@ -29,8 +29,8 @@ class CustomHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         filepath = url.path[1:] # remove leading '/'
 
         #check if file exists first. If doesnt through 404
-        f = open( filepath, 'rb' )
-        h = open( filepath + '.sha256', 'rb')
+        f = open(filepath, 'rb' )
+        h = open(filepath + '.sha256', 'rb')
         data = f.read()
         data_hash = h.read()
 
@@ -84,11 +84,11 @@ class ThreadingSimpleServer(SocketServer.ThreadingMixIn,
         self.server_bind()
         self.server_activate()
 
-    def shutdown_request(self,request): 
+    def shutdown_request(self,request):
         request.shutdown()
 
 if __name__ == '__main__':
-    
+
     if len(sys.argv) < 4:
         print 'Usage: python server.py PORT SERVER_CERT CLIENT_CERT'
         sys.exit(1)
