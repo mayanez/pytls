@@ -84,6 +84,12 @@ class ThreadingSimpleServer(SocketServer.ThreadingMixIn,
         self.server_bind()
         self.server_activate()
 
+    def finish_request(self, request, client_address):
+        try:
+            self.finish_request(request, client_address)
+        except:
+            print 'Error processing incoming request'
+
     def shutdown_request(self,request):
         request.shutdown()
 

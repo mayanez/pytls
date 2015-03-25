@@ -98,9 +98,19 @@ class Client(cmd.Cmd):
         file_name = args[0]
         mode = args[1]
 
-        #add error checking if cant reach host
-        #handle 404 if file not found
-        response = self.session.get("https://%s:%s/%s" % (self.host, self.port, file_name), verify=self.server_cert, cert=self.cert)
+        if mode not in modes:
+            print '*** Invalid mode, options are "N" "E"'
+            return
+
+        try:
+            response = self.session.get("https://%s:%s/%s" % (self.host, self.port, file_name), verify=self.server_cert, cert=self.cert)
+        except:
+            print '*** There was an error in the connection. Please try again.'
+            return
+
+        if response.status_code == 404:
+            print '*** %s was not found on the server' % file_name
+            return
 
         # Might there be a way to avoid this?
         f = open(file_name, 'wb')
@@ -113,6 +123,12 @@ class Client(cmd.Cmd):
 
         if (mode == 'E'):
             password = args[2]
+
+            if len(password) != 8:
+                print '*** Password must be of length 8'
+                f.close()
+                return
+
             fd = open(file_name + '.dec', 'wb')
             plain = self.modes[mode](data, password, False)
             fd.write(plain)
@@ -150,7 +166,6 @@ class Client(cmd.Cmd):
         mode = args[1]
         password = None
 
-        #handle if file exists before uploading?
         f = open(file_name, 'rb')
         data = f.read()
         params ={'hash' : gen_hash(data)}
@@ -158,13 +173,29 @@ class Client(cmd.Cmd):
 
         if mode == 'E':
             password = args[2]
+
+            if len(password) != 8:
+                print '*** Password must be of length 8'
+                return
+
             up_file = file_name + '.enc'
             fe = open(up_file, 'wb')
             fe.write(self.modes[mode](data, password, True))
             fe.close()
 
-        #add error checking if cant reach host
-        response = self.session.post("https://%s:%s/%s" % (self.host, self.port, file_name), params=params, files={file_name : open(up_file, 'rb')}, verify=self.server_cert, cert=self.cert)
+        response = None
+        try:
+            response = self.session.post("https://%s:%s/%s" % (self.host, self.port, file_name), params=params, files={file_name : open(up_file, 'rb')}, verify=self.server_cert, cert=self.cert)
+        except requests.exceptions.SSLError:
+            print '*** Invalid SSL Certificate. Please verify certificate.'
+            if mode == 'E':
+                os.remove(up_file)
+            return
+        except:
+            print '*** There was an error in the connection. Please try again.'
+            if mode == 'E':
+                os.remove(up_file)
+            return
 
         if mode == 'E':
             os.remove(up_file)
@@ -184,8 +215,20 @@ if __name__ == '__main__':
 
     client = Client()
 
-    client.host = sys.argv[1] # verify IP Address
-    client.port = int(sys.argv[2])
+    try:
+        #valid = socket.inet_aton(sys.argv[1])
+        #if (valid > 0):
+        client.host = sys.argv[1]
+    except:
+        print 'Invalid HOST IP'
+        sys.exit(1)
+
+    try:
+        client.port = int(sys.argv[2])
+    except ValueError:
+        print 'Invalid PORT'
+        sys.exit(1)
+
     client.server_cert = sys.argv[3]
     client.cert = sys.argv[4]
 
