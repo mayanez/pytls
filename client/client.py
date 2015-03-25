@@ -1,9 +1,15 @@
-import os, sys, socket, select, binascii, signal, threading, ushlex, cmd, datetime, ssl
+import os, sys, socket, select, binascii, signal, threading, cmd, datetime, ssl
 import requests, hashlib, random
 from Crypto.Cipher import AES
 from Crypto import Random
-from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.poolmanager import PoolManager
+
+try:
+    import ushlex
+    from requests.adapters import HTTPAdapter
+    from requests.packages.urllib3.poolmanager import PoolManager
+except ImportError:
+    print 'Please run the root Makefile to install dependencies.'
+    sys.exit(1)
 
 class SSLAdapter(HTTPAdapter):
     '''An HTTPS Transport Adapter that uses an arbitrary SSL version.'''
