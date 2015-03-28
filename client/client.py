@@ -71,8 +71,9 @@ class AESCipher(object):
 class Client(cmd.Cmd):
     host = None
     port = None
-    server_cert = None
+    ca_cert = None
     cert = None
+    key = None
     session = requests.Session()
     session.mount('https://', SSLAdapter(ssl.PROTOCOL_TLSv1))
     prompt = '>'
@@ -101,6 +102,11 @@ class Client(cmd.Cmd):
 
     def do_get(self, line):
         args = ushlex.split(line)
+
+        if len(args) < 3:
+            self.help_get()
+            return
+
         file_name = args[0]
         mode = args[1]
 
@@ -109,7 +115,7 @@ class Client(cmd.Cmd):
             return
 
         try:
-            response = self.session.get("https://%s:%s/%s" % (self.host, self.port, file_name), verify=self.server_cert, cert=self.cert)
+            response = self.session.get("https://%s:%s/%s" % (self.host, self.port, file_name), verify=self.ca_cert, cert=(self.cert, self.key))
         except:
             print '*** There was an error in the connection. Please try again.'
             return
@@ -190,18 +196,19 @@ class Client(cmd.Cmd):
             fe.close()
 
         response = None
+        
         try:
-            response = self.session.post("https://%s:%s/%s" % (self.host, self.port, file_name), params=params, files={file_name : open(up_file, 'rb')}, verify=self.server_cert, cert=self.cert)
+            response = self.session.post("https://%s:%s/%s" % (self.host, self.port, file_name), params=params, files={file_name : open(up_file, 'rb')}, verify=self.ca_cert, cert=(self.cert, self.key))
         except requests.exceptions.SSLError:
-            print '*** Invalid SSL Certificate. Please verify certificate.'
-            if mode == 'E':
-                os.remove(up_file)
-            return
+           print '*** Invalid SSL Certificate. Please verify certificate.'
+           if mode == 'E':
+               os.remove(up_file)
+           return
         except:
-            print '*** There was an error in the connection. Please try again.'
-            if mode == 'E':
-                os.remove(up_file)
-            return
+           print '*** There was an error in the connection. Please try again.'
+           if mode == 'E':
+               os.remove(up_file)
+           return
 
         if mode == 'E':
             os.remove(up_file)
@@ -212,8 +219,8 @@ class Client(cmd.Cmd):
 
 if __name__ == '__main__':
 
-    if len(sys.argv) < 5:
-        print 'Usage: python client.py HOST PORT SERVER_CERT CLIENT_CERT'
+    if len(sys.argv) < 6:
+        print 'Usage: python client.py HOST PORT CA_CERT CLIENT_CERT CLIENT_KEY'
         sys.exit(1)
 
     requests.packages.urllib3.disable_warnings()
@@ -222,9 +229,10 @@ if __name__ == '__main__':
     client = Client()
 
     try:
-        #valid = socket.inet_aton(sys.argv[1])
-        #if (valid > 0):
-        client.host = sys.argv[1]
+        valid = socket.inet_aton(sys.argv[1])
+        
+        if (valid > 0):
+            client.host = sys.argv[1]
     except:
         print 'Invalid HOST IP'
         sys.exit(1)
@@ -235,8 +243,9 @@ if __name__ == '__main__':
         print 'Invalid PORT'
         sys.exit(1)
 
-    client.server_cert = sys.argv[3]
+    client.ca_cert = sys.argv[3]
     client.cert = sys.argv[4]
+    client.key = sys.argv[5]
 
     client.cmdloop()
 
