@@ -32,7 +32,7 @@ class CustomHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         filepath = url.path[1:] # remove leading '/'
 
         if (not os.access(filepath, os.R_OK)):
-            self.send_reponse(404)
+            self.send_response(404)
             self.wfile.write("No permissions")
 
         #check if file exists first. If doesnt through 404
@@ -53,6 +53,7 @@ class CustomHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             h.close()
         else:
             self.send_response(404)
+            self.end_headers()
             self.wfile.write("Not a file or does not contain .sha256")
 
         return
@@ -101,7 +102,7 @@ class ThreadingSimpleServer(SocketServer.ThreadingMixIn,
         try:
             return BaseHTTPServer.HTTPServer.finish_request(self, request, client_address)
         except:
-            print 'Error processing incoming request. Verify Certificates.'
+            print 'Error processing incoming request.'
 
     def shutdown_request(self,request):
         request.shutdown()

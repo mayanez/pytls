@@ -103,14 +103,14 @@ class Client(cmd.Cmd):
     def do_get(self, line):
         args = ushlex.split(line)
 
-        if len(args) < 3:
+        if len(args) < 2:
             self.help_get()
             return
 
         file_name = args[0]
         mode = args[1]
 
-        if mode not in modes:
+        if mode not in self.modes:
             print '*** Invalid mode, options are "N" "E"'
             return
 
@@ -122,6 +122,7 @@ class Client(cmd.Cmd):
 
         if response.status_code == 404:
             print '*** %s was not found on the server' % file_name
+            print response.text
             return
 
         # Might there be a way to avoid this?

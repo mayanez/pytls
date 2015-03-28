@@ -1,2 +1,2 @@
 dependencies:
-	pip install --user requests ushlex pycrypto 
+	pip install --user requests ushlex pycrypto
