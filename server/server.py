@@ -6,8 +6,46 @@ import os, cgi
 import sys
 import socket
 from OpenSSL import SSL
+""" TLS Server Implementation. Uses HTTP protocol to handle communications. """
+
+def os_path_split_asunder(path, debug=False):
+    """
+    http://stackoverflow.com/a/4580931/171094
+    """
+    parts = []
+    while True:
+        newpath, tail = os.path.split(path)
+        if debug: print repr(path), (newpath, tail)
+        if newpath == path:
+            assert not tail
+            if path: parts.append(path)
+            break
+        parts.append(tail)
+        path = newpath
+    parts.reverse()
+    return parts
+
+
+def is_subdirectory(potential_subdirectory, expected_parent_directory):
+    """Verifies if a given directory is a subdirectory of a parent directory"""
+
+    def _get_normalized_parts(path):
+        return os_path_split_asunder(os.path.realpath(os.path.abspath(os.path.normpath(path))))
+
+    # make absolute and handle symbolic links, split into components
+    sub_parts = _get_normalized_parts(potential_subdirectory)
+    parent_parts = _get_normalized_parts(expected_parent_directory)
+
+    if len(parent_parts) > len(sub_parts):
+        # a parent directory never has more path segments than its child
+        return False
+
+    # we expect the zip to end with the short path, which we know to be the parent
+    return all(part1==part2 for part1, part2 in zip(sub_parts, parent_parts))
 
 def verify_cb(conn, cert, errnum, depth, ok):
+    """Verifies Certificate"""
+
     try:
         conn.check_privatekey()
     except:
@@ -21,6 +59,7 @@ def mode_n(data):
 CWD = os.path.abspath('.')
 
 class CustomHandler(BaseHTTPServer.BaseHTTPRequestHandler):
+    """Custom GET/PUT Handler for the BaseHTTPServer"""
 
     def setup(self):
         self.connection = self.request
@@ -31,11 +70,14 @@ class CustomHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         url = urlparse.urlparse(self.path)
         filepath = url.path[1:] # remove leading '/'
 
-        if (not os.access(filepath, os.R_OK)):
+        #Check if file has Read permissions and is in the directory where the client has permissions.
+        if (not (os.access(filepath, os.R_OK) and is_subdirectory(filepath, CWD))):
             self.send_response(404)
+            self.end_headers()
             self.wfile.write("No permissions")
+            return
 
-        #check if file exists first. If doesnt through 404
+        #Check if file exists first and has a valid hash. If doesnt through 404
         if (os.path.isfile(filepath) and os.path.isfile(filepath + '.sha256')):
             f = open(filepath, 'rb' )
             h = open(filepath + '.sha256', 'rb')
@@ -84,6 +126,8 @@ class CustomHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
 class ThreadingSimpleServer(SocketServer.ThreadingMixIn,
                    BaseHTTPServer.HTTPServer):
+    """Threaded BaseHTTPServer wrapped with TLS socket"""
+
     def __init__(self, server_address, HandlerClass, cert, key, ca_cert):
         SocketServer.BaseServer.__init__(self, server_address, HandlerClass)
 
@@ -118,7 +162,7 @@ if __name__ == '__main__':
     server_key = sys.argv[3]
     ca_cert = sys.argv[4]
 
-    if (not (os.path.isfile(server_cert) and os.path.isfile(server_key) and os.path.isfile(ca_cert)):
+    if (not (os.path.isfile(server_cert) and os.path.isfile(server_key) and os.path.isfile(ca_cert))):
         print 'Files for SERVER_CERT, SERVER_KEY, CA_CERT may be invalid'
         sys.exit(1)
 

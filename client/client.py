@@ -2,6 +2,11 @@ import os, sys, socket, select, binascii, signal, threading, cmd, datetime, ssl
 import requests, hashlib, random
 from Crypto.Cipher import AES
 from Crypto import Random
+"""
+Python TLS Client. 4180 - Homework 2
+Miguel A. Yanez - may2114
+
+"""
 
 try:
     import ushlex
@@ -29,14 +34,17 @@ def signal_handler(signal, frame):
     os._exit(1)
 
 def gen_hash(data):
+    """Generates a SHA256 hash"""
     m = hashlib.sha256()
     m.update(data)
     return m.hexdigest()
 
 def mode_n(data):
-        return data
+    """Mode N: Does not encrypt. Sends as plaintext"""
+    return data
 
 def mode_e(data, password, encrypt):
+    """Mode E: Encrypts/Decrypts using AES."""
     aes_cipher = AESCipher(password)
 
     if (encrypt):
@@ -45,11 +53,13 @@ def mode_e(data, password, encrypt):
         return aes_cipher.decrypt(data)
 
 class AESCipher(object):
+    """AES Cipher class using PKCS5 padding"""
 
     def __init__(self, password):
         self.password = password
 
     def encrypt(self, plain):
+        '''Encrypts using constant IV '''
         random.seed(self.password)
         plain = self.pkcs5_pad(plain)
         key = random.getrandbits(128)
@@ -57,10 +67,12 @@ class AESCipher(object):
         return cipher.encrypt(plain)
 
     def decrypt(self, enc):
+        '''Decrypts using constant IV'''
         random.seed(self.password)
         cipher = AES.new("%x" % random.getrandbits(128), AES.MODE_CBC, '0000000000000000')
         return self.pkcs5_unpad(cipher.decrypt(enc))
 
+    @staticmethod
     def pkcs5_pad(self, s):
         return s + (AES.block_size - len(s) % AES.block_size) * chr(AES.block_size - len(s) % AES.block_size)
 
@@ -69,6 +81,7 @@ class AESCipher(object):
         return s[0:-ord(s[-1])]
 
 class Client(cmd.Cmd):
+    """TLS Client with HTTP Protocol backend"""
     host = None
     port = None
     ca_cert = None
@@ -96,11 +109,13 @@ class Client(cmd.Cmd):
         return
 
     def help_get(self):
+        '''Prints Help message for GET command'''
         print '\n'.join(['get file mode [password]',
                          '\tmode -- N, E',
                          '\t[password] -- only for E mode'])
 
     def do_get(self, line):
+        '''Retrieves a file from a server'''
         args = ushlex.split(line)
 
         if len(args) < 2:
@@ -121,11 +136,10 @@ class Client(cmd.Cmd):
             return
 
         if response.status_code == 404:
-            print '*** %s was not found on the server' % file_name
+            print '*** Error for %s' % file_name
             print response.text
             return
 
-        # Might there be a way to avoid this?
         f = open(file_name, 'wb')
         for chunk in response.iter_content(4096):
             f.write(chunk)
@@ -173,11 +187,13 @@ class Client(cmd.Cmd):
                 print "*** %s did not pass verification" % file_name
 
     def help_put(self):
+        '''Prints help message for PUT command'''
         print '\n'.join(['put file mode [password]',
                          '\tmode -- N, E',
                          '\t[password] -- only for E mode'])
 
     def do_put(self, line):
+        '''Puts a file on the server'''
         args = ushlex.split(line)
         file_name = args[0]
         up_file = file_name
@@ -256,7 +272,7 @@ if __name__ == '__main__':
     client.cert = sys.argv[4]
     client.key = sys.argv[5]
 
-    if (not(os.path.isfile(client.ca_cert) and os.path.isfile(client.cert) and os.path.isfile(client.key)):
+    if (not(os.path.isfile(client.ca_cert) and os.path.isfile(client.cert) and os.path.isfile(client.key))):
         print 'Files for CA_CERT, CLIENT_CERT, CLIENT_KEY may be invalid.'
         sys.exit(1)
 
