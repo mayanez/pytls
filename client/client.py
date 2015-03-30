@@ -73,7 +73,7 @@ class AESCipher(object):
         return self.pkcs5_unpad(cipher.decrypt(enc))
 
     @staticmethod
-    def pkcs5_pad(self, s):
+    def pkcs5_pad(s):
         return s + (AES.block_size - len(s) % AES.block_size) * chr(AES.block_size - len(s) % AES.block_size)
 
     @staticmethod
