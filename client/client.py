@@ -135,6 +135,10 @@ class Client(cmd.Cmd):
         data = f.read()
 
         if (mode == 'E'):
+            if len(args) < 3:
+                self.help_get()
+                return
+
             password = args[2]
 
             if len(password) != 8:
@@ -164,8 +168,9 @@ class Client(cmd.Cmd):
 
             if (mode == 'E'):
                 os.remove(file_name + '.dec')
-
-            print "%s did not pass verification" % file_name
+                print "*** Decryption of %s failed." % file_name
+            else:
+                print "*** %s did not pass verification" % file_name
 
     def help_put(self):
         print '\n'.join(['put file mode [password]',
@@ -185,6 +190,9 @@ class Client(cmd.Cmd):
         f.close()
 
         if mode == 'E':
+            if len(args) < 3:
+                self.help_put()
+                return
             password = args[2]
 
             if len(password) != 8:
@@ -197,7 +205,7 @@ class Client(cmd.Cmd):
             fe.close()
 
         response = None
-        
+
         try:
             response = self.session.post("https://%s:%s/%s" % (self.host, self.port, file_name), params=params, files={file_name : open(up_file, 'rb')}, verify=self.ca_cert, cert=(self.cert, self.key))
         except requests.exceptions.SSLError:
@@ -231,7 +239,7 @@ if __name__ == '__main__':
 
     try:
         valid = socket.inet_aton(sys.argv[1])
-        
+
         if (valid > 0):
             client.host = sys.argv[1]
     except:
@@ -247,6 +255,10 @@ if __name__ == '__main__':
     client.ca_cert = sys.argv[3]
     client.cert = sys.argv[4]
     client.key = sys.argv[5]
+
+    if (not(os.path.isfile(client.ca_cert) and os.path.isfile(client.cert) and os.path.isfile(client.key)):
+        print 'Files for CA_CERT, CLIENT_CERT, CLIENT_KEY may be invalid.'
+        sys.exit(1)
 
     client.cmdloop()
 

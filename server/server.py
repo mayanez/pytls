@@ -114,8 +114,15 @@ if __name__ == '__main__':
         sys.exit(1)
 
     port = int(sys.argv[1])
+    server_cert = sys.argv[2]
+    server_key = sys.argv[3]
+    ca_cert = sys.argv[4]
 
-    server = ThreadingSimpleServer(('', port), CustomHandler, sys.argv[2], sys.argv[3], sys.argv[4])
+    if (not (os.path.isfile(server_cert) and os.path.isfile(server_key) and os.path.isfile(ca_cert)):
+        print 'Files for SERVER_CERT, SERVER_KEY, CA_CERT may be invalid'
+        sys.exit(1)
+
+    server = ThreadingSimpleServer(('', port), CustomHandler, server_cert, server_key, ca_cert)
     print "Server Listening on %d" % port
 
 
